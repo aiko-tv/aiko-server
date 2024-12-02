@@ -1,10 +1,45 @@
 import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
+
+const ModelSchema = new mongoose.Schema({
+  model: {
+    type: String,
+  },
+  name: {
+    type: String,
+    default: "Cafe"
+  },
+  description: {
+    type: String,
+    default: "In the Cafe"
+  },
+  agentId: {
+    type: String,
+    required: true
+  },
+  clothes: {
+    type: String,
+    default: "casual" // Default value for clothes
+  },
+  defaultAnimation: {
+    type: String,
+    default: "sitting_legs_swinging" // Default animation
+  },
+  modelPosition: {
+    type: [Number],
+    default: [0, 0, 0] // Default position
+  },
+  modelRotation: {
+    type: [Number],
+    default: [0, 0, 0] // Default rotation
+  },
+  modelScale: {
+    type: [Number],
+    default: [1, 1, 1] // Default scale
+  }
+});
 
 const SceneConfigSchema = new mongoose.Schema({
-  id: {
-    type: Number,
-    default: 0
-  },
   name: {
     type: String,
     default: "Default Scene"
@@ -13,13 +48,9 @@ const SceneConfigSchema = new mongoose.Schema({
     type: String,
     default: "Interactive Scene"
   },
-  clothes: {
-    type: String,
-    default: "casual"
-  },
   model: {
     type: String,
-    required: true
+    default: "Default Model"
   },
   environmentURL: {
     type: String,
@@ -27,28 +58,14 @@ const SceneConfigSchema = new mongoose.Schema({
   },
   defaultAnimation: {
     type: String,
-    default: "idle"
+    default: "sitting_legs_swinging"
   },
-  cameraPosition: {
-    type: [Number],
-    default: [0, 1.15, -2.5]
+  models: [ModelSchema],
+  clothes: {
+    type: String,
+    default: "casual"
   },
-  cameraRotation: {
-    type: Number,
-    default: 0
-  },
-  modelPosition: {
-    type: [Number],
-    default: [0, 0, -4]
-  },
-  modelRotation: {
-    type: [Number],
-    default: [0, 0, 0]
-  },
-  modelScale: {
-    type: [Number],
-    default: [1, 1, 1]
-  },
+
   environmentScale: {
     type: [Number],
     default: [1, 1, 1]
@@ -64,33 +81,42 @@ const SceneConfigSchema = new mongoose.Schema({
   cameraPitch: {
     type: Number,
     default: 0
+  },
+  cameraPosition: {
+    type: [Number],
+    default: [0, 1.15, -2.5]
+  },
+  cameraRotation: {
+    type: Number,
+    default: 0
   }
+  
 });
 
 const StreamingStatusSchema = new mongoose.Schema({
-  agentId: {
-    type: String,
+  id: {
+    type: Number,
     required: true,
-    unique: true,
-    index: true
-  },
-  isStreaming: {
-    type: Boolean,
-    required: true,
-    default: false
-  },
-  lastHeartbeat: {
-    type: Date,
-    default: Date.now,
-    index: true
+    unique: false,
   },
   title: {
     type: String,
     required: false
   },
-  description: {
+  agentId: {
     type: String,
-    default: "Interactive Scene"
+    required: true,
+    unique: true,
+  },
+  sceneId: {
+    type: String,
+    required: true,
+    unique: true,
+    default: uuidv4 
+  },
+  twitter: {
+    type: String,
+    required: false
   },
   modelName: {
     type: String,
@@ -100,13 +126,9 @@ const StreamingStatusSchema = new mongoose.Schema({
     type: String,
     required: false
   },
-  model: {
+  description: {
     type: String,
-    required: false
-  },
-  twitter: {
-    type: String,
-    required: false
+    default: "Interactive Scene"
   },
   color: {
     type: String,
@@ -130,11 +152,11 @@ const StreamingStatusSchema = new mongoose.Schema({
     title: String,
     avatar: String
   },
-  sceneConfigs: [SceneConfigSchema],
-  startedAt: {
-    type: Date,
+  bgm: {
+    type: String,
     required: false
   },
+  sceneConfigs: [SceneConfigSchema],
   stats: {
     likes: {
       type: Number,
@@ -152,6 +174,20 @@ const StreamingStatusSchema = new mongoose.Schema({
       type: Number,
       default: 0
     }
+  },
+  isStreaming: {
+    type: Boolean,
+    required: true,
+    default: false
+  },
+  lastHeartbeat: {
+    type: Date,
+    default: Date.now,
+    index: true
+  },
+  startedAt: {
+    type: Date,
+    required: false
   },
   updatedAt: {
     type: Date,

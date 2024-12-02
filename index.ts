@@ -31,7 +31,6 @@ import AIResponse from './models/AIResponse.js';
 import User from './models/User.js';
 import RoomMessage from './models/RoomMessage.js';
 
-
 const StreamingStatus = mongoose.model('StreamingStatus', StreamingStatusSchema);
 
 const app = express();
@@ -1600,8 +1599,9 @@ interface Scene {
   id: number;
   title: string;
   agentId: string;
-  twitter?: string;
-  modelName?: string;
+  sceneId: string;
+  twitter?: string | null;
+  modelName?: string | null;
   identifier: string;
   description: string;
   color: string;
@@ -1617,15 +1617,15 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
   try {
     // Get all active streams from the database (changed isStreaming to true)
     const activeStreams = await StreamingStatus.find({
-      isStreaming: true,
-      lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } // Only show streams with heartbeat in last 30s
+      //isStreaming: true,
+      //lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } // Only show streams with heartbeat in last 30s
     }).lean();
-
     // Transform streams into the required format
     const formattedScenes: Scene[] = activeStreams.map((stream, index) => ({
-      id: index,
+      id: stream.id,
       title: stream.title || 'Untitled Stream',
       agentId: stream.agentId,
+      sceneId: stream.sceneId,
       twitter: stream.twitter,
       modelName: stream.modelName,
       identifier: stream.identifier || stream.agentId,
@@ -1648,6 +1648,7 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
           id: configData.id || 0,
           name: configData.name || "Default Scene",
           description: configData.description || "Interactive Scene",
+          models: configData.models,
           clothes: configData.clothes || "casual",
           model: configData.model,
           environmentURL: configData.environmentURL,
