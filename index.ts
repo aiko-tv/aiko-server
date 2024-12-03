@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -14,8 +15,9 @@ import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccou
 import fetch from 'cross-fetch';
 import { UserProfile } from './models/UserProfile.js';
 import { Filter } from 'bad-words';
+import multer from 'multer';
 import * as badwordsList from 'badwords-list';
-
+import { uploadToBunnyCDN } from './upload/imageUpload.ts';
 
 // Convert ESM module path to dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -83,8 +85,8 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something broke!' });
 });
-
-
+const storage = multer.memoryStorage(); 
+const upload = multer({ storage: storage }).single('image'); 
 
 // Stats endpoints
 app.get('/api/streams/:agentId/stats', async (req, res) => {
@@ -596,10 +598,16 @@ app.get('/api/user-profile/:publicKey', async (req, res) => {
 });
 
 // Update a user profile by public key
-app.put('/api/user-profile/:publicKey', async (req, res) => {
+app.put('/api/user-profile/:publicKey', upload, async (req, res) => {
   try {
     const { publicKey } = req.params;
-    const { handle, pfp } = req.body;
+    const { handle, isUploading } = req.body;
+    let pfp;
+    console.log('body', req.body);
+    // If the user is uploading a file
+    if (isUploading && req.file) {
+      pfp = req.file.buffer;
+    }
 
     console.log('update_user_profile', req.body);
 
@@ -618,11 +626,12 @@ app.put('/api/user-profile/:publicKey', async (req, res) => {
       }
     }
 
+    // Update the user profile with the new handle and pfp (whether string or CDN URL)
     const updatedUserProfile = await UserProfile.findOneAndUpdate(
       { publicKey },
       {
         ...(handle && { handle }),
-        ...(pfp && { pfp })
+        ...(pfp && { pfp: await uploadToBunnyCDN(pfp, `${publicKey}-${uuidv4()}.${pfp.type}`) }), // Handle the image upload and update the pfp URL
       },
       { new: true }
     );
@@ -1735,7 +1744,7 @@ app.put('/api/scenes/:agentId', async (req, res) => {
   try {
     const { agentId } = req.params;
     const updateData = req.body;
-
+    console.log('updateData', updateData);
     // Validate agentId
     if (!agentId) {
       return res.status(400).json({
