@@ -47,3 +47,17 @@ export const uploadToBunnyCDN = async (uploadedImageBuffer: Buffer, originalImag
   return `https://aiko-tv.b-cdn.net/images/${originalImageName}`;
 };
 
+export const getExtensionFromMimetype = (mimetype) => {
+  const mimeToExt = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    // Add more mimetypes as needed
+  };
+  return mimeToExt[mimetype] || "png";
+};
+
+
+
