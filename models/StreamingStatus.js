@@ -7,11 +7,11 @@ const ModelSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    default: "Cafe"
+    default: "Aiko"
   },
   description: {
     type: String,
-    default: "In the Cafe"
+    default: "Aiko"
   },
   agentId: {
     type: String,
@@ -23,42 +23,57 @@ const ModelSchema = new mongoose.Schema({
   },
   defaultAnimation: {
     type: String,
-    default: "sitting_legs_swinging" // Default animation
+    default: "idle_dwarf" // Default animation
   },
   modelPosition: {
     type: [Number],
-    default: [0, 0, 0] // Default position
+    default: [
+      -0.7999999999999999,
+      -0.4999999999999999,
+      -8.700000000000014
+      ] // Default position
   },
   modelRotation: {
     type: [Number],
-    default: [0, 0, 0] // Default rotation
+    default: [
+      0,
+      1.9000000000000004,
+      0
+    ] // Default rotation
   },
   modelScale: {
     type: [Number],
-    default: [1, 1, 1] // Default scale
+    default: [
+      0.9605960100000004,
+      0.9605960100000004,
+      0.9605960100000004
+    ] // Default scale
   }
 });
 
 const SceneConfigSchema = new mongoose.Schema({
+  id: {
+    type: Number,
+    default: 0
+  },
   name: {
     type: String,
-    default: "Default Scene"
+    default: "Cafe"
   },
   description: {
     type: String,
-    default: "Interactive Scene"
+    default: "In the Cafe"
   },
   model: {
     type: String,
-    default: "Default Model"
   },
   environmentURL: {
     type: String,
-    required: true
+    default: "modern_bedroom_compressed.glb"
   },
   defaultAnimation: {
     type: String,
-    default: "sitting_legs_swinging"
+    default: "idle-2"
   },
   models: [ModelSchema],
   clothes: {
@@ -84,11 +99,15 @@ const SceneConfigSchema = new mongoose.Schema({
   },
   cameraPosition: {
     type: [Number],
-    default: [0, 1.15, -2.5]
+    default: [
+      0.5927640990168481,
+    0.749999999999999,
+    -9.904625062460699
+    ]
   },
   cameraRotation: {
     type: Number,
-    default: 0
+    default: -4.1197096184536335
   }
   
 });
@@ -110,13 +129,13 @@ const StreamingStatusSchema = new mongoose.Schema({
   },
   sceneId: {
     type: String,
-    required: true,
     unique: true,
     default: uuidv4 
   },
   twitter: {
     type: String,
-    required: false
+    required: false,
+    default: "watch_aiko"
   },
   modelName: {
     type: String,
