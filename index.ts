@@ -17,7 +17,7 @@ import { UserProfile } from './models/UserProfile.js';
 import { Filter } from 'bad-words';
 import multer from 'multer';
 import * as badwordsList from 'badwords-list';
-import { uploadToBunnyCDN } from './upload/imageUpload.ts';
+import { uploadToBunnyCDN, getExtensionFromMimetype } from './upload/imageUpload.ts';
 
 // Convert ESM module path to dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -603,13 +603,13 @@ app.put('/api/user-profile/:publicKey', upload, async (req, res) => {
     const { publicKey } = req.params;
     const { handle, isUploading } = req.body;
     let pfp;
-    console.log('body', req.body);
+    let extension;
     // If the user is uploading a file
     if (isUploading && req.file) {
+      console.log('uploading file', req.file);
       pfp = req.file.buffer;
+      extension = getExtensionFromMimetype(req.file.mimetype);
     }
-
-    console.log('update_user_profile', req.body);
 
     // Validate handle if it's being updated
     if (handle) {
@@ -631,7 +631,9 @@ app.put('/api/user-profile/:publicKey', upload, async (req, res) => {
       { publicKey },
       {
         ...(handle && { handle }),
-        ...(pfp && { pfp: await uploadToBunnyCDN(pfp, `${publicKey}-${uuidv4()}.${pfp.type}`) }), // Handle the image upload and update the pfp URL
+        ...(isUploading
+          ? pfp && { pfp: await uploadToBunnyCDN(pfp, `${uuidv4()}.${extension}`) }
+          : pfp && { pfp }) // If isUploading is false, just use the pfp directly
       },
       { new: true }
     );
@@ -948,9 +950,18 @@ export default app;
 
 
 
-app.post('/api/user-profile', async (req, res) => {
+app.post('/api/user-profile', upload, async (req, res) => {
   try {
-    const { publicKey, handle, pfp } = req.body;
+
+    const { handle, isUploading, publicKey } = req.body;
+    let pfp;
+    let extension;
+    // If the user is uploading a file
+    if (isUploading && req.file) {
+      console.log('uploading file', req.file);
+      pfp = req.file.buffer;
+      extension = getExtensionFromMimetype(req.file.mimetype);
+    }
 
     // Validate handle
     if (!handle || !isValidHandle(handle)) {
@@ -965,10 +976,15 @@ app.post('/api/user-profile', async (req, res) => {
       return res.status(409).json({ error: 'Handle already taken' });
     }
 
-    // Create or update the user profile
+    // Update the user profile with the new handle and pfp (whether string or CDN URL)
     const profile = await UserProfile.findOneAndUpdate(
       { publicKey },
-      { handle, pfp },
+      {
+        ...(handle && { handle }),
+        ...(isUploading
+          ? pfp && { pfp: await uploadToBunnyCDN(pfp, `${uuidv4()}.${extension}`) }
+          : pfp && { pfp }) // If isUploading is false, just use the pfp directly
+      },
       { new: true, upsert: true }
     );
 
@@ -1638,6 +1654,7 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
       twitter: stream.twitter,
       modelName: stream.modelName,
       identifier: stream.identifier || stream.agentId,
+      bgm: stream.bgm,
       description: stream.description,
       color: stream.color,
       type: stream.type || 'stream',
@@ -1649,7 +1666,6 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
         username: "Anonymous"
       },
       sceneConfigs: stream.sceneConfigs?.map(config => {
-        console.log({config});
         // Get the actual config data, handling potential nesting
         const configData = config.__parentArray?.[0] || config;
         
