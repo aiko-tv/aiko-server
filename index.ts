@@ -19,6 +19,11 @@ import multer from 'multer';
 import * as badwordsList from 'badwords-list';
 import { uploadImgToBunnyCDN, getExtensionFromMimetype, uploadVrmToBunnyCDN } from './upload/uploadCdn.ts';
 
+
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isValidUUID = (input: string): boolean => {
+  return uuidRegex.test(input);
+};
 // Convert ESM module path to dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -138,10 +143,19 @@ app.get('/api/comments', async (req, res) => {
     }
 
     const comments = await Comment.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit);
-      
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .populate('userProfile', 'pfp handle'); // Populate the user profile with 'pfp' and 'handle'
+
+    // Set the avatar field using the pfp from userProfile
+    for (const comment of comments) {
+      if (comment.userProfile && comment.userProfile.pfp) {
+        comment.avatar = comment.userProfile.pfp; // Overwrite avatar with pfp
+      }
+    }
+
     res.json({ comments });
+
   } catch (error) {
     console.error('Error in /api/comments:', error);
     res.status(500).json({ error: 'Failed to fetch comments' });
@@ -155,10 +169,17 @@ app.get('/api/comments/paginated', async (req, res) => {
     const skip = (page - 1) * limit;
 
     const [comments, total] = await Promise.all([
-      Comment.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Comment.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('userProfile', 'pfp handle'), // Populate with 'pfp' and 'handle',
       Comment.countDocuments()
     ]);
-
+    
+    // Loop through comments to set the avatar field to pfp from the userProfile
+    for (const comment of comments) {
+      if (comment.userProfile && comment.userProfile.pfp) {
+        comment.avatar = comment.userProfile.pfp; // Set avatar to pfp
+      }
+    }
+    
     res.json({
       comments,
       pagination: {
@@ -168,6 +189,7 @@ app.get('/api/comments/paginated', async (req, res) => {
         hasMore: skip + comments.length < total
       }
     });
+    
   } catch (error) {
     console.error('Error in /api/comments/paginated:', error);
     res.status(500).json({ error: 'Failed to fetch comments' });
@@ -290,17 +312,26 @@ app.get('/api/streams/:agentId/unread-comments', async (req, res) => {
     }
 
     const comments = await Comment.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit);
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .populate('userProfile', 'pfp handle'); // Populate user profile with 'pfp' and 'handle'
 
-    res.json({ 
-      comments,
-      metadata: {
-        count: comments.length,
-        since: since?.toISOString(),
-        hasMore: comments.length >= limit
-      }
-    });
+  // Loop through comments to set the avatar field to pfp from the userProfile
+  for (const comment of comments) {
+    if (comment.userProfile && comment.userProfile.pfp) {
+      comment.avatar = comment.userProfile.pfp; // Set avatar to pfp
+    }
+  }
+
+  res.json({
+    comments,
+    metadata: {
+      count: comments.length,
+      since: since?.toISOString(),
+      hasMore: comments.length >= limit
+    }
+  });
+
   } catch (error) {
     console.error('Error fetching unread comments:', error);
     res.status(500).json({ error: 'Failed to fetch unread comments' });
@@ -495,7 +526,7 @@ app.get('/api/agents/:agentId/top-gifters', async (req, res) => {
 });
 
 // Add RPC endpoint and connection configuration
-const endpoint = 'https://solana-mainnet.g.alchemy.com/v2/vb8vZOP3L-Y76zj43AyhCmkKm7D6wEsx';
+const endpoint = process.env.SOLANA_RPC_URL;
 const solanaConnection = new Connection(endpoint, 'confirmed');
 
 // Common token decimals
@@ -617,6 +648,7 @@ app.get('/api/user-profile/:publicKey', async (req, res) => {
 // Update a user profile by public key
 app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
   try {
+    console.log('updating user profile', req.body);
     const { publicKey } = req.params;
     const { handle, isUploading } = req.body;
     let pfp;
@@ -644,6 +676,16 @@ app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
     }
     // original file name
     const originalFileName = req.file?.originalname;
+    if (!req.file) {
+      pfp = req.body.pfp;
+    }
+
+    console.log('updating user profile', {
+      ...(handle && { handle }),
+      ...(isUploading
+        ? pfp && { pfp: await uploadImgToBunnyCDN(pfp, originalFileName || `${uuidv4()}.${extension}`) }
+        : pfp && { pfp })
+    });
     // Update the user profile with the new handle and pfp (whether string or CDN URL)
     const updatedUserProfile = await UserProfile.findOneAndUpdate(
       { publicKey },
@@ -655,11 +697,11 @@ app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
       },
       { new: true }
     );
-
+    
     if (!updatedUserProfile) {
       return res.status(404).json({ error: 'User profile not found' });
     }
-
+    console.log('updated user profile', updatedUserProfile);
     res.json(updatedUserProfile);
   } catch (error) {
     console.error('Error updating user profile:', error);
@@ -710,8 +752,8 @@ app.get('/api/agents/:agentId/chat-history', async (req, res) => {
       })
         .sort({ createdAt: -1 })
         .limit(limit)
-        .lean(),
-
+        .populate('userProfile', 'pfp handle'), // Populate userProfile with pfp and handle
+    
       AIResponse.find({
         agentId,
         createdAt: { $lt: before }
@@ -720,18 +762,22 @@ app.get('/api/agents/:agentId/chat-history', async (req, res) => {
         .limit(limit)
         .lean()
     ]);
-
+    
     // Transform and combine the results
     const chatHistory: ChatMessage[] = [
-      ...comments.map(c => ({
-        id: c._id.toString(),
-        type: 'comment' as const,
-        message: c.message,
-        createdAt: c.createdAt,
-        sender: c.user,
-        handle: c.handle,
-        avatar: c.avatar
-      })),
+      ...comments.map(c => {
+        // If userProfile is populated, set avatar to pfp
+        const avatar = c.userProfile?.pfp || c.avatar; // Fallback to existing avatar if userProfile.pfp is not available
+        return {
+          id: c._id.toString(),
+          type: 'comment' as const,
+          message: c.message,
+          createdAt: c.createdAt,
+          sender: c.user,
+          handle: c.handle,
+          avatar: avatar // Use pfp from userProfile or the existing avatar
+        };
+      }),
       ...aiResponses.map(r => ({
         id: r._id.toString(),
         type: 'ai_response' as const,
@@ -740,13 +786,13 @@ app.get('/api/agents/:agentId/chat-history', async (req, res) => {
         thought: r.thought
       }))
     ];
-
+    
     // Sort by creation date, newest first
     chatHistory.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
+    
     // Trim to requested limit
     const trimmedHistory = chatHistory.slice(0, limit);
-
+    
     res.json({
       chatHistory: trimmedHistory,
       pagination: {
@@ -754,6 +800,7 @@ app.get('/api/agents/:agentId/chat-history', async (req, res) => {
         oldestMessageDate: trimmedHistory[trimmedHistory.length - 1]?.createdAt
       }
     });
+    
 
   } catch (error) {
     console.error('Error fetching chat history:', error);
@@ -1780,7 +1827,7 @@ app.put('/api/scenes/:agentId', async (req, res) => {
     const updateData = req.body;
     console.log('updateData', updateData);
     // Validate agentId
-    if (!agentId) {
+    if (!agentId || !isValidUUID(agentId)) {
       return res.status(400).json({
         success: false,
         error: 'Missing required agentId parameter'
@@ -1971,10 +2018,6 @@ app.post('/api/upload/vrm', vrmUpload, async (req, res) => {
   const { agentId, environmentURL } = req.body;
 
   const vrmFile = req.file;
-  const isValidUUID = (input: string): boolean => {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i; // Allow any valid UUID-like string
-    return uuidRegex.test(input);
-  };
 
   if (!agentId || !isValidUUID(agentId)) {
     return res.status(400).json({ error: 'Not a valid agentId' });
