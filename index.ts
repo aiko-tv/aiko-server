@@ -21,9 +21,7 @@ import { uploadImgToBunnyCDN, getExtensionFromMimetype, uploadVrmToBunnyCDN } fr
 
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const isValidUUID = (input: string): boolean => {
-  return uuidRegex.test(input);
-};
+
 // Convert ESM module path to dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -623,6 +621,10 @@ function isValidHandle(handle: string): boolean {
   // Additional handle validation rules
   const validHandleRegex = /^[a-zA-Z0-9_-]{3,20}$/;
   return validHandleRegex.test(handle);
+}
+
+function isValidUUID(input: string): boolean {
+  return uuidRegex.test(input);
 }
 
 
