@@ -12,13 +12,11 @@ import AudioResponse from './models/AudioResponse.js';
 import { GiftTransaction } from './models/GiftTransaction.js';
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createTransferInstruction } from '@solana/spl-token';
-import fetch from 'cross-fetch';
 import { UserProfile } from './models/UserProfile.js';
 import { Filter } from 'bad-words';
 import multer from 'multer';
 import * as badwordsList from 'badwords-list';
 import { uploadImgToBunnyCDN, getExtensionFromMimetype, uploadVrmToBunnyCDN } from './upload/uploadCdn.ts';
-
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -33,17 +31,16 @@ dotenv.config();
 import Comment from './models/Comment.js';
 import Like from './models/Like.js';
 import AIResponse from './models/AIResponse.js';
-import User from './models/User.js';
 import RoomMessage from './models/RoomMessage.js';
+import AgentMapSchema from './models/AgentMap.js';
 
 const StreamingStatus = mongoose.model('StreamingStatus', StreamingStatusSchema);
-
+const AgentMap = mongoose.model('AgentMap', AgentMapSchema);
 const app = express();
 const httpServer = createServer(app);
 
 // Hardcoded MongoDB URI
 const MONGO_URI = process.env.MONGODB_URI;
-const API_KEY =  process.env.API_KEY; // unused
 
 const storage = multer.memoryStorage(); 
 const imageUpload = multer({ storage: storage }).single('image'); 
@@ -576,11 +573,6 @@ app.get('/balance/token/:walletAddress/:mintAddress', async (req, res) => {
 });
 
 
-
-// Add this near the top with other imports
-import { Filter } from 'bad-words';
-import { models } from 'mongoose';
-
 // Add these helper functions before the route
 const filter = new Filter();
 
@@ -703,7 +695,7 @@ app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
     if (!updatedUserProfile) {
       return res.status(404).json({ error: 'User profile not found' });
     }
-    console.log('updated user profile', updatedUserProfile);
+    
     res.json(updatedUserProfile);
   } catch (error) {
     console.error('Error updating user profile:', error);
@@ -1650,6 +1642,33 @@ function filterProfanity(text: string): string {
   return filteredText;
 }
 
+async function saveAgentMap(walletAddress: string, name: string, agentId: string) {
+  const agentMap = await AgentMap.findOne({ _id: "global_agent_map" });
+  if (agentMap) {
+    if (!agentMap.agents.has(agentId)) {
+      // If the walletAddress is not already in the agents map, add the new agent
+      await AgentMap.findOneAndUpdate(
+        { _id: "global_agent_map" },
+        { $set: { [`agents.${agentId}`]: {
+          name: name,
+          walletAddress: walletAddress
+        } } },
+        { upsert: true, new: true }
+      );
+      return true;
+    } else {
+      // update the agent name and wallet address
+      agentMap.agents.set(agentId, { name, walletAddress });
+      await agentMap.save();
+      return true;
+    }
+  } else {
+    // Handle the case where the agent map document does not exist
+    console.log('Agent map document not found.');
+    return false;
+  }
+}
+
 
 // Interface for scene configuration
 interface SceneConfig {
@@ -1827,7 +1846,7 @@ app.put('/api/scenes/:agentId', async (req, res) => {
   try {
     const { agentId } = req.params;
     const updateData = req.body;
-    console.log('updateData', updateData);
+
     // Validate agentId
     if (!agentId || !isValidUUID(agentId)) {
       return res.status(400).json({
@@ -2012,6 +2031,42 @@ app.put('/api/rooms/:roomId/messages/mark-read', async (req, res) => {
       success: false,
       error: 'Failed to mark messages as read'
     });
+  }
+});
+
+// Add or updates agent in map
+app.put('/api/agentmap/:agentId', async (req, res) => {
+  const { agentId } = req.params;
+  const { name, walletAddress } = req.body;
+
+  if (!agentId || !isValidUUID(agentId)) {
+    return res.status(400).json({ error: 'Not a valid agentId' });
+  }
+  if (!walletAddress || !name) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const success = await saveAgentMap(walletAddress, name, agentId);
+  if (!success) {
+    return res.status(400).json({ error: 'Agent with this wallet address already exists in map.' });
+  }
+  res.json({ success: true });
+});
+
+app.get('/api/agents', async (req, res) => {
+  try {
+    // Fetch the agent map document
+    const agentMap = await AgentMap.findOne({ _id: "global_agent_map" });
+
+    // If agentMap exists, return only the 'agents' field
+    if (agentMap && agentMap.agents) {
+      res.json(agentMap.agents);
+    } else {
+      res.status(404).json({ error: 'Agent map not found' });
+    }
+  } catch (error) {
+    console.error('Error fetching agent map:', error);
+    res.status(500).json({ error: 'Failed to fetch agent map' });
   }
 });
 
