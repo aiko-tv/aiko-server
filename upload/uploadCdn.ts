@@ -8,19 +8,20 @@ const HOSTNAME = 'la.storage.bunnycdn.com';
 const STORAGE_ZONE_NAME = 'aiko-tv';
 const ACCESS_KEY = process.env.BUNNY_STORAGE_API_KEY;
 
-const saveTempImage = (buffer: Buffer, originalName: string): string => {
+const saveTempFile = (buffer: Buffer, originalName: string): string => {
   const tempDir = path.join(os.tmpdir(), originalName);
   fs.writeFileSync(tempDir, buffer);
   return tempDir;
 };
 
-const uploadImageToBunnyCDN = async (filePath: string, fileName: string) => {
-  const readStream = fs.createReadStream(filePath);
+export const uploadImgToBunnyCDN = async (uploadedImageBuffer: Buffer, originalImageName: string) => {
+  const tempImagePath = saveTempFile(uploadedImageBuffer, originalImageName);
+  const readStream = fs.createReadStream(tempImagePath);
 
   const options = {
     method: 'PUT',
     host: HOSTNAME,
-    path: `/${STORAGE_ZONE_NAME}/images/${fileName}`,
+    path: `/${STORAGE_ZONE_NAME}/images/${originalImageName}`,
     headers: {
       AccessKey: ACCESS_KEY,
       'Content-Type': 'application/octet-stream',
@@ -38,13 +39,37 @@ const uploadImageToBunnyCDN = async (filePath: string, fileName: string) => {
   });
 
   readStream.pipe(req);
-};
-
-export const uploadToBunnyCDN = async (uploadedImageBuffer: Buffer, originalImageName: string) => {
-  const tempImagePath = saveTempImage(uploadedImageBuffer, originalImageName);
-  await uploadImageToBunnyCDN(tempImagePath, originalImageName);
   fs.unlinkSync(tempImagePath);
   return `https://aiko-tv.b-cdn.net/images/${originalImageName}`;
+};
+
+export const uploadVrmToBunnyCDN = async (uploadedVrmBuffer: Buffer, originalVrmName: string) => {
+  const tempVrmPath = saveTempFile(uploadedVrmBuffer, originalVrmName);
+  const readStream = fs.createReadStream(tempVrmPath);
+
+  const options = {
+    method: 'PUT',
+    host: HOSTNAME,
+    path: `/${STORAGE_ZONE_NAME}/models/${originalVrmName}`,
+    headers: {
+      AccessKey: ACCESS_KEY,
+      'Content-Type': 'application/octet-stream',
+    },
+  };
+
+  const req = https.request(options, (res) => {
+    res.on('data', (chunk) => {
+      console.log(chunk.toString('utf8'));
+    });
+  });
+
+  req.on('error', (error) => {
+    console.error(error);
+  });
+
+  readStream.pipe(req);
+  fs.unlinkSync(tempVrmPath);
+  return `https://aiko-tv.b-cdn.net/models/${originalVrmName}`;
 };
 
 export const getExtensionFromMimetype = (mimetype) => {
@@ -54,6 +79,8 @@ export const getExtensionFromMimetype = (mimetype) => {
     "image/jpg": "jpg",
     "image/gif": "gif",
     "image/webp": "webp",
+    "model/vnd.vrm": "vrm",
+    "application/octet-stream": "vrm",
     // Add more mimetypes as needed
   };
   return mimeToExt[mimetype] || "png";
