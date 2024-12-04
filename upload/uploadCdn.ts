@@ -21,7 +21,7 @@ export const uploadImgToBunnyCDN = async (uploadedImageBuffer: Buffer, originalI
   const options = {
     method: 'PUT',
     host: HOSTNAME,
-    path: `/${STORAGE_ZONE_NAME}/images/${originalImageName}`,
+    path: `/${STORAGE_ZONE_NAME}/userImages/${originalImageName}`,
     headers: {
       AccessKey: ACCESS_KEY,
       'Content-Type': 'application/octet-stream',
@@ -40,7 +40,7 @@ export const uploadImgToBunnyCDN = async (uploadedImageBuffer: Buffer, originalI
 
   readStream.pipe(req);
   fs.unlinkSync(tempImagePath);
-  return `https://aiko-tv.b-cdn.net/images/${originalImageName}`;
+  return `https://aiko-tv.b-cdn.net/userImages/${originalImageName}`;
 };
 
 export const uploadVrmToBunnyCDN = async (uploadedVrmBuffer: Buffer, originalVrmName: string) => {
