@@ -211,6 +211,10 @@ const StreamingStatusSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  hasUploadedVrm: {
+    type: Boolean,
+    default: false
   }
 });
 

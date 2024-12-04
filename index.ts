@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import mongoose from 'mongoose';
+import mongoose, { model } from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -17,7 +17,7 @@ import { UserProfile } from './models/UserProfile.js';
 import { Filter } from 'bad-words';
 import multer from 'multer';
 import * as badwordsList from 'badwords-list';
-import { uploadToBunnyCDN, getExtensionFromMimetype } from './upload/imageUpload.ts';
+import { uploadImgToBunnyCDN, getExtensionFromMimetype, uploadVrmToBunnyCDN } from './upload/uploadCdn.ts';
 
 // Convert ESM module path to dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -41,6 +41,24 @@ const httpServer = createServer(app);
 // Hardcoded MongoDB URI
 const MONGO_URI = process.env.MONGODB_URI;
 const API_KEY =  process.env.API_KEY; // unused
+
+const storage = multer.memoryStorage(); 
+const imageUpload = multer({ storage: storage }).single('image'); 
+// New multer storage for VRM files
+const vrmUpload = multer({ 
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['model/vnd.vrm', 'application/octet-stream']; // Adjust types as needed
+    const allowedExtensions = ['.vrm'];
+
+    const fileExtension = file.originalname.split('.').pop();
+    if (allowedTypes.includes(file.mimetype) || allowedExtensions.includes(`.${fileExtension}`)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only VRM files are allowed.') as any, false);
+    }
+  }
+}).single('vrm');
 
 // Configure CORS
 app.use(cors({
@@ -85,8 +103,6 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something broke!' });
 });
-const storage = multer.memoryStorage(); 
-const upload = multer({ storage: storage }).single('image'); 
 
 // Stats endpoints
 app.get('/api/streams/:agentId/stats', async (req, res) => {
@@ -534,6 +550,7 @@ app.get('/balance/token/:walletAddress/:mintAddress', async (req, res) => {
 
 // Add this near the top with other imports
 import { Filter } from 'bad-words';
+import { models } from 'mongoose';
 
 // Add these helper functions before the route
 const filter = new Filter();
@@ -598,7 +615,7 @@ app.get('/api/user-profile/:publicKey', async (req, res) => {
 });
 
 // Update a user profile by public key
-app.put('/api/user-profile/:publicKey', upload, async (req, res) => {
+app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
   try {
     const { publicKey } = req.params;
     const { handle, isUploading } = req.body;
@@ -632,7 +649,7 @@ app.put('/api/user-profile/:publicKey', upload, async (req, res) => {
       {
         ...(handle && { handle }),
         ...(isUploading
-          ? pfp && { pfp: await uploadToBunnyCDN(pfp, `${uuidv4()}.${extension}`) }
+          ? pfp && { pfp: await uploadImgToBunnyCDN(pfp, `${uuidv4()}.${extension}`) }
           : pfp && { pfp }) // If isUploading is false, just use the pfp directly
       },
       { new: true }
@@ -950,7 +967,7 @@ export default app;
 
 
 
-app.post('/api/user-profile', upload, async (req, res) => {
+app.post('/api/user-profile', imageUpload, async (req, res) => {
   try {
 
     const { handle, isUploading, publicKey } = req.body;
@@ -982,7 +999,7 @@ app.post('/api/user-profile', upload, async (req, res) => {
       {
         ...(handle && { handle }),
         ...(isUploading
-          ? pfp && { pfp: await uploadToBunnyCDN(pfp, `${uuidv4()}.${extension}`) }
+          ? pfp && { pfp: await uploadImgToBunnyCDN(pfp, `${uuidv4()}.${extension}`) }
           : pfp && { pfp }) // If isUploading is false, just use the pfp directly
       },
       { new: true, upsert: true }
@@ -1946,4 +1963,51 @@ app.put('/api/rooms/:roomId/messages/mark-read', async (req, res) => {
       error: 'Failed to mark messages as read'
     });
   }
+});
+
+// Upload vrm for storage
+app.post('/api/upload/vrm', vrmUpload, async (req, res) => {
+  const { agentId, environmentURL } = req.body;
+
+  const vrmFile = req.file;
+
+  if (!agentId || !environmentURL) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  if (!vrmFile) {
+    return res.status(400).json({ error: 'No VRM file uploaded' });
+  }
+  // find by agentId and hasUploadedVrm false
+  const hasUploaded = await StreamingStatus.findOne({ agentId, hasUploadedVrm: false });
+  if (!hasUploaded) {
+    return res.status(400).json({ error: 'VRM already uploaded' });
+  }
+  const vrmBuffer = vrmFile.buffer;
+  // the originaal file name
+  const modelName = vrmFile.originalname;
+  const vrmUrl = await uploadVrmToBunnyCDN(vrmBuffer, modelName);
+
+  try {
+    const updateStatus = await StreamingStatus.findOneAndUpdate(
+      { agentId },
+      { $set: { 
+        hasUploadedVrm: true,
+        sceneConfigs: [{ models: [{ 
+        model: vrmUrl,
+        agentId,
+      }] }] } },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true // Enable schema validation on update
+      }
+    );
+    console.log('updateStatus from upload vrm', updateStatus);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error uploading vrm:', error);
+    res.status(500).json({ error: 'Failed to upload vrm' });
+  }
+  
 });
