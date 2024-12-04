@@ -3,7 +3,6 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import mongoose, { model } from 'mongoose';
-import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -1970,14 +1969,24 @@ app.post('/api/upload/vrm', vrmUpload, async (req, res) => {
   const { agentId, environmentURL } = req.body;
 
   const vrmFile = req.file;
+  const isValidUUID = (input: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i; // Allow any valid UUID-like string
+    return uuidRegex.test(input);
+  };
 
-  if (!agentId || !environmentURL) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  if (!agentId || !isValidUUID(agentId)) {
+    return res.status(400).json({ error: 'Not a valid agentId' });
   }
 
   if (!vrmFile) {
     return res.status(400).json({ error: 'No VRM file uploaded' });
   }
+
+  const fileExtension = vrmFile.originalname.split('.').pop();
+  if (fileExtension !== 'vrm') {
+    return res.status(400).json({ error: 'Invalid file type. Only .vrm files are allowed.' });
+  }
+
   // find by agentId and hasUploadedVrm false
   const hasUploaded = await StreamingStatus.findOne({ agentId, hasUploadedVrm: false });
   if (!hasUploaded) {
@@ -1993,10 +2002,12 @@ app.post('/api/upload/vrm', vrmUpload, async (req, res) => {
       { agentId },
       { $set: { 
         hasUploadedVrm: true,
-        sceneConfigs: [{ models: [{ 
-        model: vrmUrl,
-        agentId,
-      }] }] } },
+        sceneConfigs: [
+          environmentURL,
+          { models: [{ 
+            model: vrmUrl,
+            agentId,
+          }] }] } },
       {
         new: true,
         upsert: true,
