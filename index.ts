@@ -5,6 +5,7 @@ import cors from 'cors';
 import mongoose, { model } from 'mongoose';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
+import { v4 as uuidv4 } from 'uuid';
 import { dirname } from 'path';
 import StreamingStatusSchema from './models/StreamingStatus.js';
 import AudioResponse from './models/AudioResponse.js';
@@ -641,14 +642,15 @@ app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
         return res.status(409).json({ error: 'Handle already taken' });
       }
     }
-
+    // original file name
+    const originalFileName = req.file?.originalname;
     // Update the user profile with the new handle and pfp (whether string or CDN URL)
     const updatedUserProfile = await UserProfile.findOneAndUpdate(
       { publicKey },
       {
         ...(handle && { handle }),
         ...(isUploading
-          ? pfp && { pfp: await uploadImgToBunnyCDN(pfp, `${uuidv4()}.${extension}`) }
+          ? pfp && { pfp: await uploadImgToBunnyCDN(pfp, originalFileName || `${uuidv4()}.${extension}`) }
           : pfp && { pfp }) // If isUploading is false, just use the pfp directly
       },
       { new: true }
