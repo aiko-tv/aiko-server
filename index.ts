@@ -1728,8 +1728,13 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
   try {
     // Get all active streams from the database (changed isStreaming to true)
     const activeStreams = await StreamingStatus.find({
-      isStreaming: true,
-      lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } // Only show streams with heartbeat in last 30s
+      $or: [
+        {
+          isStreaming: true,
+          lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } // Only show streams with heartbeat in the last 10s
+        },
+        { isAiko: true } // Always include the agent with isaiko: true
+      ]
     }).lean();
     // Transform streams into the required format
     const formattedScenes: Scene[] = activeStreams.map((stream, index) => ({

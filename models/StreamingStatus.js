@@ -161,7 +161,8 @@ const StreamingStatusSchema = new mongoose.Schema({
   creator: {
     username: String,
     title: String,
-    avatar: String
+    avatar: String,
+    description: String
   },
   bgm: {
     type: String,
@@ -207,7 +208,21 @@ const StreamingStatusSchema = new mongoose.Schema({
   hasUploadedVrm: {
     type: Boolean,
     default: false
+  },
+  isAiko: {
+    type: Boolean,
+    default: false,
+  },
+});
+
+StreamingStatusSchema.pre('save', async function (next) {
+  if (this.isAiko) {
+    const existing = await mongoose.model('StreamingStatus').findOne({ isAiko: true, _id: { $ne: this._id } });
+    if (existing) {
+      return next(new Error('Only one document can have isaiko set to true.'));
+    }
   }
+  next();
 });
 
 // Update timestamp on save

@@ -21,7 +21,6 @@ export const BGM_URLS = {
 
 export const NEW_STREAM_CONFIGS = [
     {
-      id: 0,
       title: "Aiko's Stream",
       agentId: "a9f3105f-7b14-09bd-919f-a1482637a374",
       // ^ old - agentId was the identified for each scene. This should need to be sceneId or something else. 
@@ -42,7 +41,6 @@ export const NEW_STREAM_CONFIGS = [
       bgm: BGM_URLS.AIKO.DEFAULT,
       sceneConfigs: [
         {
-          "id": 0,
           "name": "Cafe",
           "environmentURL": "modern_bedroom_compressed.glb",
           "models": [
@@ -117,7 +115,6 @@ export const NEW_STREAM_CONFIGS = [
           "cameraRotation": -4.708758241001718
         },
         {
-          "id": 0,
           "name": "Cafe",
           "environmentURL": "modern_bedroom_compressed.glb",
           "models": [
@@ -177,7 +174,6 @@ export const NEW_STREAM_CONFIGS = [
       },
     },
     {
-      id: 2,
       title: "ch6n9's Stream",
       agentId: "642c7c0e-c4cd-0283-aba4-24a81f33ad5e",
       twitter: "@ch6n9",
@@ -189,7 +185,7 @@ export const NEW_STREAM_CONFIGS = [
       type: "stream",
       hasUploadedVrm: true,
       component: "ThreeScene",
-      creator: { avatar: "https://pbs.twimg.com/profile_images/1847496619627073536/pgdap09V_400x400.jpg", title: "$XD", username: "ch6n9" },
+      creator: { avatar: "https://aiko-tv.b-cdn.net/agentImages/nHW-yYim_400x400.jpg", title: "$XD", username: "ch6n9" },
       sceneConfigs: [
         {
           "name": "Cafe",
@@ -252,7 +248,6 @@ export const NEW_STREAM_CONFIGS = [
       },
     },
     {
-      id: 0,
       title: "Eliza's Sister",
       agentId: "ffc1faee-704d-0c1e-abc4-2198dfb8eda8",
       twitter: "@elizas_sister",
