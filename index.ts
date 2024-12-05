@@ -648,11 +648,11 @@ app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
     let pfp;
     let extension;
     // If the user is uploading a file
-    if (isUploading && req.file) {
+    if (isUploading === "true" && req.file) {
       console.log('uploading file', req.file);
       pfp = req.file.buffer;
       extension = getExtensionFromMimetype(req.file.mimetype);
-    }
+    } 
 
     // Validate handle if it's being updated
     if (handle) {
@@ -670,13 +670,13 @@ app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
     }
     // original file name
     const originalFileName = req.file?.originalname;
-    if (!req.file) {
-      pfp = req.body.pfp;
+    if (isUploading === "false") {
+      pfp = req.body.image;
     }
 
     console.log('updating user profile', {
       ...(handle && { handle }),
-      ...(isUploading
+      ...(isUploading === "true"
         ? pfp && { pfp: await uploadImgToBunnyCDN(pfp, originalFileName || `${uuidv4()}.${extension}`) }
         : pfp && { pfp })
     });
@@ -685,7 +685,7 @@ app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
       { publicKey },
       {
         ...(handle && { handle }),
-        ...(isUploading
+        ...(isUploading === "true"
           ? pfp && { pfp: await uploadImgToBunnyCDN(pfp, originalFileName || `${uuidv4()}.${extension}`) }
           : pfp && { pfp }) // If isUploading is false, just use the pfp directly
       },
