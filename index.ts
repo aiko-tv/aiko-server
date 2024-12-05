@@ -1816,7 +1816,6 @@ app.post('/api/scenes', async (req: express.Request, res: express.Response) => {
         });
       }
     }
-
     // Create new streaming status with proper defaults
     const newStream = new StreamingStatus({
       agentId,
