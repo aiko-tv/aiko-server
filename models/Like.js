@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const LikeSchema = new mongoose.Schema({
   user: {
     type: String,
-    required: false
+    required: true  // user is now required
   },
   agentId: {
     type: String,
@@ -17,8 +17,8 @@ const LikeSchema = new mongoose.Schema({
   pfp: String
 });
 
+// Removed the unique constraint to allow multiple likes per user
 LikeSchema.index({ user: 1, agentId: 1 }, {
-  unique: true,
   partialFilterExpression: { user: { $exists: true } }
 });
 
