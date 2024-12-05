@@ -52,10 +52,7 @@ const ModelSchema = new mongoose.Schema({
 });
 
 const SceneConfigSchema = new mongoose.Schema({
-  id: {
-    type: Number,
-    default: 0
-  },
+
   name: {
     type: String,
     default: "Cafe"
@@ -113,11 +110,6 @@ const SceneConfigSchema = new mongoose.Schema({
 });
 
 const StreamingStatusSchema = new mongoose.Schema({
-  id: {
-    type: Number,
-    required: true,
-    unique: false,
-  },
   title: {
     type: String,
     required: false
