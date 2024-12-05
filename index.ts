@@ -16,7 +16,7 @@ import { UserProfile } from './models/UserProfile.js';
 import { Filter } from 'bad-words';
 import multer from 'multer';
 import * as badwordsList from 'badwords-list';
-import { uploadImgToBunnyCDN, getExtensionFromMimetype, uploadVrmToBunnyCDN } from './upload/uploadCdn.ts';
+import { uploadImgToBunnyCDN, getExtensionFromMimetype, uploadVrmToBunnyCDN, uploadAudioToBunnyCDN } from './upload/uploadCdn.ts';
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -2122,4 +2122,18 @@ app.post('/api/upload/vrm', vrmUpload, async (req, res) => {
     res.status(500).json({ error: 'Failed to upload vrm' });
   }
   
+});
+
+// Needs some testing from aiko-client to see if it works
+app.post('/api/upload/audio', async (req, res) => {
+  try {
+    // check if req is the audio stream
+    if (req.headers['isAudioStream'] !== 'true' && req.headers['content-type'] !== 'audio/mpeg') {
+      return res.status(400).json({ error: 'Not an audio stream' });
+    }
+    const url = await uploadAudioToBunnyCDN(req);
+    res.json({ message: 'Upload successful', url });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });

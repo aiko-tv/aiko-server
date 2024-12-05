@@ -86,5 +86,74 @@ export const getExtensionFromMimetype = (mimetype) => {
   return mimeToExt[mimetype] || "png";
 };
 
+export const uploadAudioToBunnyCDN = async (req: any): Promise<string> => {
+  const timestamp = Date.now();
+  const fileName = `${timestamp}.mp3`;
+  const filePath = path.join('/tmp', fileName);
+
+  try {
+    // Save audio file temporarily
+    await new Promise<void>((resolve, reject) => {
+      const writeStream = fs.createWriteStream(filePath);
+      req.pipe(writeStream);
+
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+    });
+
+    console.log(`Audio file saved at ${filePath}`);
+
+    // Upload to BunnyCDN
+    const options = {
+      method: 'PUT',
+      host: 'la.storage.bunnycdn.com',
+      path: `/aiko-tv/speech/${fileName}`,
+      headers: {
+        'AccessKey': process.env.BUNNY_STORAGE_API_KEY, // Your BunnyCDN API key from environment variables
+        'Content-Type': 'audio/mpeg',
+      },
+    };
+
+    // Perform the upload
+    const publicUrl = await new Promise<string>((resolve, reject) => {
+      const fileStream = fs.createReadStream(filePath);
+      const uploadReq = https.request(options, (uploadRes) => {
+        if (uploadRes.statusCode === 201) {
+          const publicUrl = `https://aiko-tv.b-cdn.net/speech/${fileName}`;
+          console.log("BunnyCDN upload successful", { publicUrl });
+          resolve(publicUrl);
+        } else {
+          let data = '';
+          uploadRes.on('data', chunk => data += chunk);
+          uploadRes.on('end', () => {
+            console.error("BunnyCDN upload failed", { statusCode: uploadRes.statusCode, response: data });
+            reject(new Error(`Upload failed: ${data}`));
+          });
+        }
+      });
+
+      uploadReq.on('error', (error) => {
+        console.error("Upload request error", error);
+        reject(error);
+      });
+
+      fileStream.pipe(uploadReq);
+    });
+
+    // Clean up the temporary file after upload
+    fs.unlink(filePath, (err) => {
+      if (err) {
+        console.error("Error deleting temporary file", err);
+      } else {
+        console.log("Temporary file deleted");
+      }
+    });
+
+    return publicUrl;
+  } catch (error) {
+    console.error("Error during audio upload:", error);
+    throw new Error("Audio upload failed");
+  }
+};
 
 
