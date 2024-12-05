@@ -1552,7 +1552,7 @@ io.on('connection', (socket) => {
         avatar: comment.avatar,
         handle: comment.handle
       });
-      
+      console.log('newComment', newComment);
       await newComment.save();
       io.emit('comment_received', { newComment, commentCount });
       if (agentId) {
