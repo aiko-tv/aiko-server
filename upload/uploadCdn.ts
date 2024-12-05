@@ -65,8 +65,11 @@ export const uploadVrmToBunnyCDN = async (uploadedVrmBuffer: Buffer, originalVrm
 
   req.on('error', (error) => {
     console.error(error);
+    if (error) {
+      fs.unlinkSync(tempVrmPath);
+      return null;
+    }
   });
-
   readStream.pipe(req);
   fs.unlinkSync(tempVrmPath);
   return `https://aiko-tv.b-cdn.net/models/${originalVrmName}`;

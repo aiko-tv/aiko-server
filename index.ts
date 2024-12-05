@@ -1728,8 +1728,8 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
   try {
     // Get all active streams from the database (changed isStreaming to true)
     const activeStreams = await StreamingStatus.find({
-      //isStreaming: true,
-      //lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } // Only show streams with heartbeat in last 30s
+      isStreaming: true,
+      lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } // Only show streams with heartbeat in last 30s
     }).lean();
     // Transform streams into the required format
     const formattedScenes: Scene[] = activeStreams.map((stream, index) => ({
@@ -2070,7 +2070,7 @@ app.get('/api/agents', async (req, res) => {
 });
 
 // Upload vrm for storage
-app.post('/api/upload/vrm', vrmUpload, async (req, res) => {
+app.put('/api/upload/vrm', vrmUpload, async (req, res) => {
   const { agentId, environmentURL } = req.body;
 
   const vrmFile = req.file;
@@ -2089,32 +2089,40 @@ app.post('/api/upload/vrm', vrmUpload, async (req, res) => {
   }
 
   // find by agentId and hasUploadedVrm false
-  const hasUploaded = await StreamingStatus.findOne({ agentId, hasUploadedVrm: false });
-  if (!hasUploaded) {
-    return res.status(400).json({ error: 'VRM already uploaded' });
-  }
+  // const hasUploaded = await StreamingStatus.findOne({ agentId, hasUploadedVrm: false });
+  // if (!hasUploaded) {
+  //   return res.status(400).json({ error: 'VRM already uploaded' });
+  // }
   const vrmBuffer = vrmFile.buffer;
   // the originaal file name
   const modelName = vrmFile.originalname;
   const vrmUrl = await uploadVrmToBunnyCDN(vrmBuffer, modelName);
-
+  if (vrmUrl === null) {
+    return res.status(400).json({ error: 'Failed to upload vrm' });
+  }
   try {
     const updateStatus = await StreamingStatus.findOneAndUpdate(
       { agentId },
       { $set: { 
         hasUploadedVrm: true,
-        sceneConfigs: [
-          environmentURL,
-          { models: [{ 
-            model: vrmUrl,
-            agentId,
-          }] }] } },
+        sceneConfigs: [{
+            environmentURL,
+            models: [{
+              model: vrmUrl,
+              agentId
+            }]
+          }]
+        }
+      },
       {
         new: true,
         upsert: true,
         runValidators: true // Enable schema validation on update
       }
     );
+    if (!updateStatus) {
+      return res.status(400).json({ error: 'Failed to update streaming status' });
+    }
     console.log('updateStatus from upload vrm', updateStatus);
     res.json({ success: true });
   } catch (error) {
@@ -2135,5 +2143,42 @@ app.post('/api/upload/audio', async (req, res) => {
     res.json({ message: 'Upload successful', url });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/agent/:agentId', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+
+    // Validate agentId
+    if (!agentId || !isValidUUID(agentId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required agentId parameter'
+      });
+    }
+    const status = await StreamingStatus.findOne({ agentId });
+
+    // return agent info
+    const response = {
+      name: status?.modelName,
+      description: status?.creator?.description || 'No description set',
+      avatar: status?.creator?.avatar || 'https://aiko-tv.b-cdn.net/images/pfp_pink.png',
+      aikoHandle: status?.creator?.username || `${agentId.slice(0, 6)}`,
+      twitter: status?.twitter,
+      isStreaming: status?.isStreaming
+    }
+
+    res.json({
+      success: true,
+      response
+    });
+
+  } catch (error) {
+    console.error('Error updating agent status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update agent status'
+    });
   }
 });
