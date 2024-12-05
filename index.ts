@@ -2141,10 +2141,17 @@ app.put('/api/upload/vrm', vrmUpload, async (req, res) => {
 app.post('/api/upload/audio', async (req, res) => {
   try {
     // check if req is the audio stream
+    console.log('TESTING IF THIS IS BEING CALLED');
     if (req.headers['isAudioStream'] !== 'true' && req.headers['content-type'] !== 'audio/mpeg') {
       return res.status(400).json({ error: 'Not an audio stream' });
     }
-    const url = await uploadAudioToBunnyCDN(req);
+    const audioBuffer = await new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('end', () => resolve(Buffer.concat(chunks)));
+      req.on('error', (err) => reject(err));
+    });
+    const url = await uploadAudioToBunnyCDN(audioBuffer);
     res.json({ message: 'Upload successful', url });
   } catch (error) {
     res.status(500).json({ error: error.message });
