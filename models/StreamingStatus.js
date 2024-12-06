@@ -4,7 +4,6 @@ import { v4 as uuidv4 } from 'uuid';
 const ModelSchema = new mongoose.Schema({
   model: {
     type: String,
-    default: null
   },
   name: {
     type: String,
@@ -64,7 +63,6 @@ const SceneConfigSchema = new mongoose.Schema({
   },
   model: {
     type: String,
-    default: null
   },
   environmentURL: {
     type: String,
