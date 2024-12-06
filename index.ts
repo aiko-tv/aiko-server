@@ -1746,6 +1746,7 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
           $and: [
             { isStreaming: true },
             { lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } },
+            { sceneConfigs: { $elemMatch: { model: { $exists: true, $ne: null } } } }
           ]
         }
       ]
@@ -1871,33 +1872,57 @@ app.put('/api/scenes/:agentId', async (req, res) => {
       });
     }
 
-    // Validate sceneConfigs if provided
+    // Get the current document
+    const currentDoc = await StreamingStatus.findOne({ agentId });
+
+    // Handle sceneConfigs updates
     if (updateData.sceneConfigs) {
-      const hasInvalidConfig = updateData.sceneConfigs.some((config: any) => 
-        !config.environmentURL
-      );
-      if (hasInvalidConfig) {
-        return res.status(400).json({
-          success: false,
-          error: 'Each sceneConfig must include model and environmentURL'
-        });
-      }
+      updateData.sceneConfigs = updateData.sceneConfigs.map((newConfig: any, index: number) => {
+        const currentConfig = currentDoc?.sceneConfigs?.[index] || {};
+        
+        // Handle models array if it exists in the new config
+        if (newConfig.models) {
+          newConfig.models = newConfig.models.map((newModel: any, modelIndex: number) => {
+            const currentModel = currentConfig.models?.[modelIndex] || {};
+            return {
+              ...currentModel,
+              ...newModel
+            };
+          });
+        } else if (currentConfig.models) {
+          // Keep existing models if not provided in update
+          newConfig.models = currentConfig.models;
+        }
+
+        // Merge the current config with the new config
+        return {
+          ...currentConfig,
+          ...newConfig
+        };
+      });
     }
 
     const now = new Date();
-    const update = {
-      ...updateData,
-      lastHeartbeat: now,
-      updatedAt: now
-    };
+    
+    // Create an update object that preserves existing fields
+    const updateFields = Object.keys(updateData).reduce((acc, key) => {
+      if (updateData[key] !== undefined) {
+        acc[key] = updateData[key];
+      }
+      return acc;
+    }, {} as Record<string, any>);
+
+    // Always update lastHeartbeat and updatedAt
+    updateFields.lastHeartbeat = now;
+    updateFields.updatedAt = now;
 
     const status = await StreamingStatus.findOneAndUpdate(
       { agentId },
-      { $set: update },
+      { $set: updateFields },
       {
         new: true,
         upsert: true,
-        runValidators: true // Enable schema validation on update
+        runValidators: true
       }
     );
 
