@@ -1746,7 +1746,6 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
           $and: [
             { isStreaming: true },
             { lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } },
-            { sceneConfigs: { $elemMatch: { model: { $exists: true, $ne: null } } } }
           ]
         }
       ]
