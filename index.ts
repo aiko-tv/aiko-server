@@ -2131,9 +2131,9 @@ app.post('/api/upload/vrm',
           hasUploadedVrm: true,
           sceneConfigs: [{
               environmentURL,
-              model: vrmResponse.url,
+              model: modelName,
               models: [{
-                model: vrmResponse.url,
+                model: modelName,
                 agentId
               }]
             }]
