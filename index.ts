@@ -1873,7 +1873,7 @@ app.put('/api/scenes/:agentId', async (req, res) => {
     // Validate sceneConfigs if provided
     if (updateData.sceneConfigs) {
       const hasInvalidConfig = updateData.sceneConfigs.some((config: any) => 
-        !config.model || !config.environmentURL
+        !config.environmentURL
       );
       if (hasInvalidConfig) {
         return res.status(400).json({
