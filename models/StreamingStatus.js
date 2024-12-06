@@ -213,6 +213,10 @@ const StreamingStatusSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  dPublicKey: {
+    type: String,
+    required: false
+  }
 });
 
 StreamingStatusSchema.pre('save', async function (next) {
