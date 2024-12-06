@@ -43,7 +43,7 @@ export const uploadImgToBunnyCDN = async (uploadedImageBuffer: Buffer, originalI
   return `https://aiko-tv.b-cdn.net/userImages/${originalImageName}`;
 };
 
-export const uploadVrmToBunnyCDN = async (uploadedVrmBuffer: Buffer, originalVrmName: string) => {
+export const uploadVrmToBunnyCDN = async (uploadedVrmBuffer: Buffer, originalVrmName: string): Promise<{ status: string; url: string | null; message?: string }> => {
   const tempVrmPath = saveTempFile(uploadedVrmBuffer, originalVrmName);
   const readStream = fs.createReadStream(tempVrmPath);
 
@@ -57,22 +57,45 @@ export const uploadVrmToBunnyCDN = async (uploadedVrmBuffer: Buffer, originalVrm
     },
   };
 
-  const req = https.request(options, (res) => {
-    res.on('data', (chunk) => {
-      console.log(chunk.toString('utf8'));
-    });
-  });
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let responseBody = '';
 
-  req.on('error', (error) => {
-    console.error(error);
-    if (error) {
-      fs.unlinkSync(tempVrmPath);
-      return null;
-    }
+      res.on('data', (chunk) => {
+        responseBody += chunk.toString('utf8');
+      });
+
+      res.on('end', () => {
+        fs.unlinkSync(tempVrmPath); // Cleanup temporary file
+        if (res.statusCode === 201) {
+          console.log('Upload successful:', responseBody);
+          resolve({
+            status: 'success',
+            url: `https://aiko-tv.b-cdn.net/models/${originalVrmName}`,
+          });
+        } else {
+          console.error('Upload failed:', res.statusCode, responseBody);
+          resolve({
+            status: 'error',
+            message: `Upload failed: ${res.statusCode} ${responseBody}`,
+            url: null,
+          });
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      console.error(error);
+      fs.unlinkSync(tempVrmPath); // Cleanup temporary file
+      reject({
+        status: 'error',
+        message: `Upload failed: ${error.message}`,
+        url: null,
+      });
+    });
+
+    readStream.pipe(req);
   });
-  readStream.pipe(req);
-  fs.unlinkSync(tempVrmPath);
-  return `https://aiko-tv.b-cdn.net/models/${originalVrmName}`;
 };
 
 export const getExtensionFromMimetype = (mimetype) => {
