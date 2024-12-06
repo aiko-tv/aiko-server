@@ -17,6 +17,7 @@ import { Filter } from 'bad-words';
 import multer from 'multer';
 import * as badwordsList from 'badwords-list';
 import { uploadImgToBunnyCDN, getExtensionFromMimetype, uploadVrmToBunnyCDN, uploadAudioToBunnyCDN } from './upload/uploadCdn.ts';
+import { web3Auth, authorizedPk } from './middleware/web3Auth.ts';
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -282,6 +283,16 @@ async function markCommentsAsRead(commentIds: string[]): Promise<MarkCommentsRea
     console.error('Error marking comments as read:', error);
     return { success: false, error: 'Failed to mark comments as read' };
   }
+}
+
+async function verifyTrustedUser(pk: string, agentId: string) {
+    // find streaming status with agentId
+    const streamingStatus = await StreamingStatus.findOne({ agentId });
+    // check if pk matches dPublicKey and return boolean
+    if (streamingStatus?.dPublicKey === pk) {
+      return true;
+    }
+    return false;
 }
 
 app.get('/api/streams/:agentId/unread-comments', async (req, res) => {
@@ -2075,65 +2086,69 @@ app.get('/api/agents', async (req, res) => {
 });
 
 // Upload vrm for storage
-app.put('/api/upload/vrm', vrmUpload, async (req, res) => {
-  const { agentId, environmentURL } = req.body;
-
-  const vrmFile = req.file;
-
-  if (!agentId || !isValidUUID(agentId)) {
-    return res.status(400).json({ error: 'Not a valid agentId' });
-  }
-
-  if (!vrmFile) {
-    return res.status(400).json({ error: 'No VRM file uploaded' });
-  }
-
-  const fileExtension = vrmFile.originalname.split('.').pop();
-  if (fileExtension !== 'vrm') {
-    return res.status(400).json({ error: 'Invalid file type. Only .vrm files are allowed.' });
-  }
-
-  // find by agentId and hasUploadedVrm false
-  // const hasUploaded = await StreamingStatus.findOne({ agentId, hasUploadedVrm: false });
-  // if (!hasUploaded) {
-  //   return res.status(400).json({ error: 'VRM already uploaded' });
-  // }
-  const vrmBuffer = vrmFile.buffer;
-  // the originaal file name
-  const modelName = vrmFile.originalname;
-  const vrmUrl = await uploadVrmToBunnyCDN(vrmBuffer, modelName);
-  if (vrmUrl === null) {
-    return res.status(400).json({ error: 'Failed to upload vrm' });
-  }
-  try {
-    const updateStatus = await StreamingStatus.findOneAndUpdate(
-      { agentId },
-      { $set: { 
-        hasUploadedVrm: true,
-        sceneConfigs: [{
-            environmentURL,
-            models: [{
-              model: vrmUrl,
-              agentId
-            }]
-          }]
-        }
-      },
-      {
-        new: true,
-        upsert: true,
-        runValidators: true // Enable schema validation on update
+app.post('/api/upload/vrm', 
+  vrmUpload, 
+  web3Auth({ action: 'vrm:post', allowSkipCheck: true }), 
+  async (req, res) => {
+    try {
+      // get the public key from the request
+      const pk = authorizedPk(res);
+      if (!pk) {
+        return res.status(400).json({ error: 'No public key found' });
       }
-    );
-    if (!updateStatus) {
-      return res.status(400).json({ error: 'Failed to update streaming status' });
+      const { agentId, environmentURL } = req.body;
+      const isTrustedUser = await verifyTrustedUser(pk, agentId);
+      if (!isTrustedUser) {
+        return res.status(400).json({ error: 'Not a trusted user' });
+      }
+      const vrmFile = req.file;
+
+      if (!agentId || !isValidUUID(agentId)) {
+        return res.status(400).json({ error: 'Not a valid agentId' });
+      }
+      if (!vrmFile) {
+        return res.status(400).json({ error: 'No VRM file uploaded' });
+      }
+      const fileExtension = vrmFile.originalname.split('.').pop();
+      if (fileExtension !== 'vrm') {
+        return res.status(400).json({ error: 'Invalid file type. Only .vrm files are allowed.' });
+      }
+
+      const vrmBuffer = vrmFile.buffer;
+      // the originaal file name
+      const modelName = vrmFile.originalname;
+      const vrmUrl = await uploadVrmToBunnyCDN(vrmBuffer, modelName);
+      if (vrmUrl === null) {
+        return res.status(400).json({ error: 'Failed to upload vrm' });
+      }
+      const updateStatus = await StreamingStatus.findOneAndUpdate(
+        { agentId },
+        { $set: { 
+          hasUploadedVrm: true,
+          sceneConfigs: [{
+              environmentURL,
+              models: [{
+                model: vrmUrl,
+                agentId
+              }]
+            }]
+          }
+        },
+        {
+          new: true,
+          upsert: true,
+          runValidators: true // Enable schema validation on update
+        }
+      );
+      if (!updateStatus) {
+        return res.status(400).json({ error: 'Failed to update streaming status' });
+      }
+      //console.log('updateStatus from upload vrm', updateStatus);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error uploading vrm:', error);
+      res.status(500).json({ error: 'Failed to upload vrm' });
     }
-    console.log('updateStatus from upload vrm', updateStatus);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error uploading vrm:', error);
-    res.status(500).json({ error: 'Failed to upload vrm' });
-  }
   
 });
 
