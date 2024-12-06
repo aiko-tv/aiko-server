@@ -1740,13 +1740,17 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
     // Get all active streams from the database (changed isStreaming to true)
     const activeStreams = await StreamingStatus.find({
       $or: [
+        { isAiko: true },
+        { isBall: true }, 
         {
-          isStreaming: true,
-          lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } // Only show streams with heartbeat in the last 10s
-        },
-        { isAiko: true } // Always include the agent with isaiko: true
+          $and: [
+            { isStreaming: true },
+            { lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } }, // Streams with heartbeat in the last 10s
+            { model: { $exists: true, $ne: null } } // Only include streams with associated models
+          ]
+        }
       ]
-    }).lean();
+    }).lean();       
     // Transform streams into the required format
     const formattedScenes: Scene[] = activeStreams.map((stream, index) => ({
       id: stream.id,
@@ -2117,8 +2121,8 @@ app.post('/api/upload/vrm',
       const vrmBuffer = vrmFile.buffer;
       // the originaal file name
       const modelName = vrmFile.originalname;
-      const vrmUrl = await uploadVrmToBunnyCDN(vrmBuffer, modelName);
-      if (vrmUrl === null) {
+      const vrmResponse = await uploadVrmToBunnyCDN(vrmBuffer, modelName);
+      if (vrmResponse.status === 'error') {
         return res.status(400).json({ error: 'Failed to upload vrm' });
       }
       const updateStatus = await StreamingStatus.findOneAndUpdate(
@@ -2127,8 +2131,9 @@ app.post('/api/upload/vrm',
           hasUploadedVrm: true,
           sceneConfigs: [{
               environmentURL,
+              model: vrmResponse.url,
               models: [{
-                model: vrmUrl,
+                model: vrmResponse.url,
                 agentId
               }]
             }]

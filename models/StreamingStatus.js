@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 const ModelSchema = new mongoose.Schema({
   model: {
     type: String,
+    default: null
   },
   name: {
     type: String,
@@ -63,6 +64,7 @@ const SceneConfigSchema = new mongoose.Schema({
   },
   model: {
     type: String,
+    default: null
   },
   environmentURL: {
     type: String,
@@ -211,7 +213,9 @@ const StreamingStatusSchema = new mongoose.Schema({
   },
   isAiko: {
     type: Boolean,
-    default: false,
+  },
+  isBall: {
+    type: Boolean,
   },
   dPublicKey: {
     type: String,
@@ -221,11 +225,19 @@ const StreamingStatusSchema = new mongoose.Schema({
 
 StreamingStatusSchema.pre('save', async function (next) {
   if (this.isAiko) {
-    const existing = await mongoose.model('StreamingStatus').findOne({ isAiko: true, _id: { $ne: this._id } });
-    if (existing) {
-      return next(new Error('Only one document can have isaiko set to true.'));
+    const existingAiko = await mongoose.model('StreamingStatus').findOne({ isAiko: true, _id: { $ne: this._id } });
+    if (existingAiko) {
+      return next(new Error('Only one document can have isAiko set to true.'));
     }
   }
+
+  if (this.isBall) {
+    const existingBall = await mongoose.model('StreamingStatus').findOne({ isBall: true, _id: { $ne: this._id } });
+    if (existingBall) {
+      return next(new Error('Only one document can have isBall set to true.'));
+    }
+  }
+
   next();
 });
 
