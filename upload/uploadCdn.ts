@@ -14,33 +14,63 @@ const saveTempFile = (buffer: Buffer, originalName: string): string => {
   return tempDir;
 };
 
-export const uploadImgToBunnyCDN = async (uploadedImageBuffer: Buffer, originalImageName: string) => {
+export const uploadImgToBunnyCDN = async (
+  uploadedImageBuffer: Buffer,
+  originalImageName: string,
+  folder: string
+): Promise<{ status: string; url: string | null; message?: string }> => {
   const tempImagePath = saveTempFile(uploadedImageBuffer, originalImageName);
   const readStream = fs.createReadStream(tempImagePath);
 
   const options = {
     method: 'PUT',
     host: HOSTNAME,
-    path: `/${STORAGE_ZONE_NAME}/userImages/${originalImageName}`,
+    path: `/${STORAGE_ZONE_NAME}/${folder}/${originalImageName}`,
     headers: {
       AccessKey: ACCESS_KEY,
       'Content-Type': 'application/octet-stream',
     },
   };
 
-  const req = https.request(options, (res) => {
-    res.on('data', (chunk) => {
-      console.log(chunk.toString('utf8'));
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let responseBody = '';
+
+      res.on('data', (chunk) => {
+        responseBody += chunk.toString('utf8');
+      });
+
+      res.on('end', () => {
+        fs.unlinkSync(tempImagePath); // Cleanup temporary file
+        if (res.statusCode === 201) {
+          console.log('Image upload successful:', responseBody);
+          resolve({
+            status: 'success',
+            url: `https://aiko-tv.b-cdn.net/userImages/${originalImageName}`,
+          });
+        } else {
+          console.error('Image upload failed:', res.statusCode, responseBody);
+          resolve({
+            status: 'error',
+            message: `Image upload failed: ${res.statusCode} ${responseBody}`,
+            url: null,
+          });
+        }
+      });
     });
-  });
 
-  req.on('error', (error) => {
-    console.error(error);
-  });
+    req.on('error', (error) => {
+      console.error(error);
+      fs.unlinkSync(tempImagePath); // Cleanup temporary file
+      reject({
+        status: 'error',
+        message: `Image upload failed: ${error.message}`,
+        url: null,
+      });
+    });
 
-  readStream.pipe(req);
-  fs.unlinkSync(tempImagePath);
-  return `https://aiko-tv.b-cdn.net/userImages/${originalImageName}`;
+    readStream.pipe(req);
+  });
 };
 
 export const uploadVrmToBunnyCDN = async (uploadedVrmBuffer: Buffer, originalVrmName: string): Promise<{ status: string; url: string | null; message?: string }> => {

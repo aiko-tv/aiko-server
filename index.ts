@@ -34,9 +34,12 @@ import Like from './models/Like.js';
 import AIResponse from './models/AIResponse.js';
 import RoomMessage from './models/RoomMessage.js';
 import AgentMapSchema from './models/AgentMap.js';
+import AvatarMarketplaceSchema from './models/AvatarMarketplace.js';
 
 const StreamingStatus = mongoose.model('StreamingStatus', StreamingStatusSchema);
 const AgentMap = mongoose.model('AgentMap', AgentMapSchema);
+const AvatarMarketplace = mongoose.model('AvatarMarketplace', AvatarMarketplaceSchema);
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -685,11 +688,15 @@ app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
       pfp = req.body.image;
     }
 
+    const pfpUrl = await uploadImgToBunnyCDN(pfp, originalFileName || `${uuidv4()}.${extension}`, 'userImages');
+    if (pfpUrl.status === 'error') {
+      return res.status(400).json({ error: 'Failed to upload image' });
+    }
     console.log('updating user profile', {
       ...(handle && { handle }),
       ...(isUploading === "true"
-        ? pfp && { pfp: await uploadImgToBunnyCDN(pfp, originalFileName || `${uuidv4()}.${extension}`) }
-        : pfp && { pfp })
+        ? pfp && { pfp: pfpUrl.url }
+        : pfp && { pfp: pfpUrl.url })
     });
     // Update the user profile with the new handle and pfp (whether string or CDN URL)
     const updatedUserProfile = await UserProfile.findOneAndUpdate(
@@ -697,8 +704,8 @@ app.put('/api/user-profile/:publicKey', imageUpload, async (req, res) => {
       {
         ...(handle && { handle }),
         ...(isUploading === "true"
-          ? pfp && { pfp: await uploadImgToBunnyCDN(pfp, originalFileName || `${uuidv4()}.${extension}`) }
-          : pfp && { pfp }) // If isUploading is false, just use the pfp directly
+          ? pfp && { pfp: pfpUrl.url }
+          : pfp && { pfp: pfpUrl.url }) // If isUploading is false, just use the pfp directly
       },
       { new: true }
     );
@@ -1045,15 +1052,18 @@ app.post('/api/user-profile', imageUpload, async (req, res) => {
     if (existingProfile && existingProfile.publicKey !== publicKey) {
       return res.status(409).json({ error: 'Handle already taken' });
     }
-
+    const pfpUrl = await uploadImgToBunnyCDN(pfp, `${uuidv4()}.${extension}`, 'userImages');
+    if (pfpUrl.status === 'error') {
+      return res.status(400).json({ error: 'Failed to upload image' });
+    }
     // Update the user profile with the new handle and pfp (whether string or CDN URL)
     const profile = await UserProfile.findOneAndUpdate(
       { publicKey },
       {
         ...(handle && { handle }),
         ...(isUploading
-          ? pfp && { pfp: await uploadImgToBunnyCDN(pfp, `${uuidv4()}.${extension}`) }
-          : pfp && { pfp }) // If isUploading is false, just use the pfp directly
+          ? pfp && { pfp: pfpUrl.url }
+          : pfp && { pfp: pfpUrl.url }) // If isUploading is false, just use the pfp directly
       },
       { new: true, upsert: true }
     );
@@ -1746,6 +1756,7 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
           $and: [
             { isStreaming: true },
             { lastHeartbeat: { $gte: new Date(Date.now() - 10 * 1000) } },
+            { sceneConfigs: { $elemMatch: { model: { $exists: true, $ne: null } } } }
           ]
         }
       ]
@@ -2298,6 +2309,57 @@ app.post('/api/upload/vrm',
     } catch (error) {
       console.error('Error uploading vrm:', error);
       res.status(500).json({ error: 'Failed to upload vrm' });
+    }
+  
+});
+
+const fileUpload = multer().fields([
+  { name: 'vrmFile', maxCount: 1 }, // One .vrm file
+  { name: 'imageFile', maxCount: 1 }, // One image
+]);
+
+// Avatar Marketplace endpoints
+app.post('/api/create/vrm', 
+  fileUpload, 
+  async (req, res) => {
+    try {
+      const vrmFile = req.files?.['vrmFile']?.[0];
+      const imageFile = req.files?.['imageFile']?.[0];
+      if (!vrmFile || !imageFile) {
+        return res.status(400).json({ success: false, error: 'No VRM or image file uploaded' });
+      }
+      const fileExtension = vrmFile.originalname.split('.').pop();
+      if (fileExtension !== 'vrm') {
+        return res.status(400).json({ success: false, error: 'Invalid file type. Only .vrm files are allowed.' });
+      }
+
+      const vrmBuffer = vrmFile.buffer;
+      // the originaal file name
+      const modelName = vrmFile.originalname;
+      const vrmResponse = await uploadVrmToBunnyCDN(vrmBuffer, modelName);
+      if (vrmResponse.status === 'error') {
+        return res.status(400).json({ success: false, error: 'Failed to upload vrm' });
+      }
+
+      const imageBuffer = imageFile.buffer;
+      const imageResponse = await uploadImgToBunnyCDN(imageBuffer, imageFile.originalname, 'avatarImages');
+      if (imageResponse.status === 'error') {
+        return res.status(400).json({ success: false, error: 'Failed to upload image' });
+      }
+      // add to avatar marketplace
+      const avatarMarketplace = await AvatarMarketplace.create({
+        filename: modelName,
+        screenshot: imageResponse.url,
+        createdAt: new Date(),
+      })
+      console.log('avatarMarketplace:', avatarMarketplace);
+      if (!avatarMarketplace) {
+        return res.status(400).json({ success: false, error: 'Failed to create avatar marketplace' });
+      }
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error('Error uploading vrm:', error);
+      res.status(500).json({ success: false, error: 'Failed to upload vrm' });
     }
   
 });
