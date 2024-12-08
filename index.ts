@@ -1756,6 +1756,7 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
       $or: [
         { isAiko: true },
         { isBall: true },
+        { isDegenSpartanAI: true },
         {
           $and: [
             { isStreaming: true },
