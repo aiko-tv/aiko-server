@@ -63,6 +63,10 @@ const vrmUpload = multer({
     }
   }
 }).single('vrm');
+const fileUpload = multer().fields([
+  { name: 'vrmFile', maxCount: 1 }, // One .vrm file
+  { name: 'imageFile', maxCount: 1 }, // One image
+]);
 
 // Configure CORS
 app.use(cors({
@@ -2121,74 +2125,6 @@ app.get('/api/agents', async (req, res) => {
   }
 });
 
-// Upload vrm for storage
-app.post('/api/upload/vrm', 
-  vrmUpload, 
-  web3Auth({ action: 'vrm:post', allowSkipCheck: true }), 
-  async (req, res) => {
-    try {
-      // get the public key from the request
-      const pk = authorizedPk(res);
-      if (!pk) {
-        return res.status(400).json({ error: 'No public key found' });
-      }
-      const { agentId, environmentURL } = req.body;
-      const isTrustedUser = await verifyTrustedUser(pk, agentId);
-      if (!isTrustedUser) {
-        return res.status(400).json({ error: 'Not a trusted user' });
-      }
-      const vrmFile = req.file;
-
-      if (!agentId || !isValidUUID(agentId)) {
-        return res.status(400).json({ error: 'Not a valid agentId' });
-      }
-      if (!vrmFile) {
-        return res.status(400).json({ error: 'No VRM file uploaded' });
-      }
-      const fileExtension = vrmFile.originalname.split('.').pop();
-      if (fileExtension !== 'vrm') {
-        return res.status(400).json({ error: 'Invalid file type. Only .vrm files are allowed.' });
-      }
-
-      const vrmBuffer = vrmFile.buffer;
-      // the originaal file name
-      const modelName = vrmFile.originalname;
-      const vrmResponse = await uploadVrmToBunnyCDN(vrmBuffer, modelName);
-      if (vrmResponse.status === 'error') {
-        return res.status(400).json({ error: 'Failed to upload vrm' });
-      }
-      const updateStatus = await StreamingStatus.findOneAndUpdate(
-        { agentId },
-        { $set: { 
-          hasUploadedVrm: true,
-          sceneConfigs: [{
-              environmentURL,
-              model: modelName,
-              models: [{
-                model: modelName,
-                agentId
-              }]
-            }]
-          }
-        },
-        {
-          new: true,
-          upsert: true,
-          runValidators: true // Enable schema validation on update
-        }
-      );
-      if (!updateStatus) {
-        return res.status(400).json({ error: 'Failed to update streaming status' });
-      }
-      //console.log('updateStatus from upload vrm', updateStatus);
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Error uploading vrm:', error);
-      res.status(500).json({ error: 'Failed to upload vrm' });
-    }
-  
-});
-
 // Needs some testing from aiko-client to see if it works
 app.post('/api/upload/audio', async (req, res) => {
   try {
@@ -2253,43 +2189,51 @@ app.post('/api/upload/vrm',
   async (req, res) => {
     try {
       // get the public key from the request
+      const { agentId, isUploading, environmentURL, vrmPicked } = req.body;
+      console.log('req.body:', req.body);
+      const vrmUploaded = req.file;
       const pk = authorizedPk(res);
+      console.log('pk:', pk);
       if (!pk) {
         return res.status(400).json({ error: 'No public key found' });
       }
-      const { agentId } = req.body;
       const isTrustedUser = await verifyTrustedUser(pk, agentId);
       if (!isTrustedUser) {
         return res.status(400).json({ error: 'Not a trusted user' });
       }
-      const vrmFile = req.file;
 
       if (!agentId || !isValidUUID(agentId)) {
         return res.status(400).json({ error: 'Not a valid agentId' });
       }
-      if (!vrmFile) {
-        return res.status(400).json({ error: 'No VRM file uploaded' });
-      }
-      const fileExtension = vrmFile.originalname.split('.').pop();
-      if (fileExtension !== 'vrm') {
-        return res.status(400).json({ error: 'Invalid file type. Only .vrm files are allowed.' });
+
+      let modelName = '';
+      if (isUploading === 'true') {
+        if (!vrmUploaded) {
+          return res.status(400).json({ error: 'No VRM file uploaded' });
+        }
+        const fileExtension = vrmUploaded.originalname.split('.').pop();
+        if (fileExtension !== 'vrm') {
+          return res.status(400).json({ error: 'Invalid file type. Only .vrm files are allowed.' });
+        }
+  
+        const vrmBuffer = vrmUploaded.buffer;
+        // the originaal file name
+        modelName = vrmUploaded.originalname;
+        const vrmResponse = await uploadVrmToBunnyCDN(vrmBuffer, modelName);
+        if (vrmResponse.status === 'error') {
+          return res.status(400).json({ error: 'Failed to upload vrm' });
+        }
+      } else {
+        modelName = '';
       }
 
-      const vrmBuffer = vrmFile.buffer;
-      // the originaal file name
-      const modelName = vrmFile.originalname;
-      const vrmResponse = await uploadVrmToBunnyCDN(vrmBuffer, modelName);
-      if (vrmResponse.status === 'error') {
-        return res.status(400).json({ error: 'Failed to upload vrm' });
-      }
       const updateStatus = await StreamingStatus.findOneAndUpdate(
         { agentId },
         { $set: { 
-          hasUploadedVrm: true,
           sceneConfigs: [{
-              model: modelName,
+              model: isUploading === 'true' ? modelName : vrmPicked,
               models: [{
-                model: modelName,
+                model: isUploading === 'true' ? modelName : vrmPicked,
                 agentId
               }]
             }]
@@ -2306,17 +2250,13 @@ app.post('/api/upload/vrm',
       }
       //console.log('updateStatus from upload vrm', updateStatus);
       res.json({ success: true });
+      
     } catch (error) {
       console.error('Error uploading vrm:', error);
       res.status(500).json({ error: 'Failed to upload vrm' });
     }
   
 });
-
-const fileUpload = multer().fields([
-  { name: 'vrmFile', maxCount: 1 }, // One .vrm file
-  { name: 'imageFile', maxCount: 1 }, // One image
-]);
 
 // Avatar Marketplace endpoints
 app.post('/api/create/vrm', 
@@ -2362,4 +2302,15 @@ app.post('/api/create/vrm',
       res.status(500).json({ success: false, error: 'Failed to upload vrm' });
     }
   
+});
+
+// Get all avatars in the marketplace
+app.get('/api/avatars', async (req, res) => {
+  const avatars = await AvatarMarketplace.find();
+  if (!avatars) {
+    return res.status(400).json({ success: false, error: 'No avatars found' });
+  }
+
+  // Return the avatars array directly without the "avatars" key
+  res.status(200).json(avatars);
 });

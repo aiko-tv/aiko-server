@@ -50,7 +50,7 @@ export const web3Auth: Web3AuthHandlerCreator = (ctx) => (req, res, next) => {
       .status(401)
       .send({ error: { message: 'Missing Authorization header' } });
   }
-
+  console.log('authHeader:', authHeader);
   const [, authToken] = authHeader.split(' ');
   const [pk, msg, sig] = authToken.split('.');
   const hasValidSig = nacl.sign.detached.verify(
@@ -58,7 +58,7 @@ export const web3Auth: Web3AuthHandlerCreator = (ctx) => (req, res, next) => {
     b58.decode(sig),
     new PublicKey(pk).toBytes(),
   );
-
+  console.log('hasValidSig:', hasValidSig);
   if (!hasValidSig) {
     return res.status(401).send({ error: { message: 'Invalid signature' } });
   }

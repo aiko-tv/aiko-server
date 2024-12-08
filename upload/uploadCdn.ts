@@ -46,7 +46,7 @@ export const uploadImgToBunnyCDN = async (
           console.log('Image upload successful:', responseBody);
           resolve({
             status: 'success',
-            url: `https://aiko-tv.b-cdn.net/userImages/${originalImageName}`,
+            url: `https://aiko-tv.b-cdn.net/${folder}/${originalImageName}`,
           });
         } else {
           console.error('Image upload failed:', res.statusCode, responseBody);
