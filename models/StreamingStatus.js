@@ -218,6 +218,9 @@ const StreamingStatusSchema = new mongoose.Schema({
   dPublicKey: {
     type: String,
     required: false
+  },
+  isDegenSpartanAI: {
+    type: Boolean,
   }
 });
 
@@ -233,6 +236,13 @@ StreamingStatusSchema.pre('save', async function (next) {
     const existingBall = await mongoose.model('StreamingStatus').findOne({ isBall: true, _id: { $ne: this._id } });
     if (existingBall) {
       return next(new Error('Only one document can have isBall set to true.'));
+    }
+  }
+
+  if (this.isDegenSpartanAI) {
+    const existingDegenSpartanAI = await mongoose.model('StreamingStatus').findOne({ isDegenSpartanAI: true, _id: { $ne: this._id } });
+    if (existingDegenSpartanAI) {
+      return next(new Error('Only one document can have isDegenSpartanAI set to true.'));
     }
   }
 
