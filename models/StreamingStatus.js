@@ -221,6 +221,9 @@ const StreamingStatusSchema = new mongoose.Schema({
   },
   isDegenSpartanAI: {
     type: Boolean,
+  },
+  isOn: {
+    type: Boolean,
   }
 });
 

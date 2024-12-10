@@ -18,7 +18,6 @@ import multer from 'multer';
 import * as badwordsList from 'badwords-list';
 import { uploadImgToBunnyCDN, getExtensionFromMimetype, uploadVrmToBunnyCDN, uploadAudioToBunnyCDN } from './upload/uploadCdn.ts';
 import { web3Auth, authorizedPk } from './middleware/web3Auth.ts';
-
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Convert ESM module path to dirname
@@ -1757,6 +1756,7 @@ app.get('/api/scenes', async (req: express.Request, res: express.Response) => {
         { isAiko: true },
         { isBall: true },
         { isDegenSpartanAI: true },
+        { isOn: true },
         {
           $and: [
             { isStreaming: true },
