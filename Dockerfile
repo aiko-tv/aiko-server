@@ -4,7 +4,9 @@ WORKDIR /usr/src/app
 
 COPY package*.json ./
 
-RUN bun install
+RUN npm install
+
+COPY . .
 
 EXPOSE 6969
 EXPOSE 8080
