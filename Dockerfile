@@ -6,8 +6,6 @@ COPY package*.json ./
 
 RUN bun install
 
-COPY . .
-
 EXPOSE 6969
 EXPOSE 8080
 
